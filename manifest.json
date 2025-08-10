@@ -1,0 +1,15 @@
+{
+  "name": "ChartDreamer",
+  "id": "chartdreamer-plugin",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  },
+  "permissions": [],
+  "capabilities": [],
+  "enableProposedApi": false,
+  "enablePrivatePluginApi": false
+} 
