@@ -1,0 +1,39 @@
+{
+  "dependencies": {
+    "@create-figma-plugin/ui": "^4.0.1",
+    "@create-figma-plugin/utilities": "^4.0.1",
+    "preact": ">=10",
+    "prismjs": "1.29.0",
+    "react-simple-code-editor": "0.13.1"
+  },
+  "devDependencies": {
+    "@create-figma-plugin/build": "^4.0.1",
+    "@create-figma-plugin/tsconfig": "^4.0.1",
+    "@figma/plugin-typings": "1.109.0",
+    "@types/prismjs": "1.26.3",
+    "@typescript-eslint/eslint-plugin": "^8.39.0",
+    "@typescript-eslint/parser": "^8.39.0",
+    "eslint": "^9.33.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "prettier": "^3.6.2",
+    "typescript": ">=5"
+  },
+  "scripts": {
+    "build": "build-figma-plugin --typecheck --minify",
+    "watch": "build-figma-plugin --typecheck --watch",
+    "lint": "eslint . --ext .ts,.tsx",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\""
+  },
+  "figma-plugin": {
+    "editorType": [
+      "figma"
+    ],
+    "id": "figma-chartdreamer",
+    "name": "Chartdreamer",
+    "main": "src/main.ts",
+    "ui": "src/ui.tsx"
+  }
+}
