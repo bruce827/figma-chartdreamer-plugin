@@ -1,10 +1,8 @@
 module.exports = function (buildOptions) {
   return {
     ...buildOptions,
-    define: {
-      global: 'window'
-    },
     mainFields: ['module', 'main'],
-    platform: 'neutral'
+    platform: 'neutral',
+    external: []
   }
 }
