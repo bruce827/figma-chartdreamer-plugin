@@ -523,6 +523,53 @@ function Plugin() {
 
       <VerticalSpace space="large" />
 
+      {/* Frame检测状态 - 智能尺寸适配 */}
+      <div style={{ 
+        padding: '12px',
+        backgroundColor: '#f8fafc',
+        borderRadius: '6px',
+        border: '1px solid #e2e8f0'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+          <div style={{ 
+            width: '12px', 
+            height: '12px', 
+            borderRadius: '50%', 
+            backgroundColor: '#10b981',
+            flexShrink: 0
+          }}></div>
+          <Text><Bold>智能尺寸适配</Bold></Text>
+        </div>
+        <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
+          在Figma中选中一个Frame对象，插件将自动检测其尺寸并适配桑基图绘制
+        </div>
+        <div style={{ 
+          padding: '8px',
+          backgroundColor: '#f1f5f9',
+          borderRadius: '4px',
+          fontSize: '12px',
+          color: '#475569',
+          marginBottom: '8px'
+        }}>
+          💡 <Bold>如何选择Frame：</Bold>
+          <br />• 在Figma画布中，选择包含"Frame"标签的容器对象
+          <br />• 确保选中的是Frame，不是Rectangle、Text或其他形状
+          <br />• Frame通常有背景色和边框，可以包含其他元素
+        </div>
+        <div style={{ 
+          padding: '8px',
+          backgroundColor: '#fef3c7',
+          borderRadius: '4px',
+          fontSize: '12px',
+          color: '#92400e',
+          border: '1px solid #fbbf24'
+        }}>
+          ⚠️ <Bold>注意：</Bold>选中Frame后，桑基图将按照Frame尺寸自动调整，实现完美适配
+        </div>
+      </div>
+
+      <VerticalSpace space="medium" />
+
       {/* 操作按钮组 */}
       <div style={{ display: 'flex', gap: '8px' }}>
         <Button

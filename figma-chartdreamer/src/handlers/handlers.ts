@@ -4,7 +4,7 @@
  */
 
 import { EventHandler } from '@create-figma-plugin/utilities';
-import { GenerateSankeyRequest, ErrorMessage, ChartConfig } from '../types/sankey.types';
+import { GenerateSankeyRequest, ErrorMessage, ChartConfig, FrameSize } from '../types/sankey.types';
 
 /**
  * 生成桑基图事件处理器
@@ -28,6 +28,22 @@ export interface GenerateSuccessHandler extends EventHandler {
 export interface GenerateErrorHandler extends EventHandler {
   name: 'GENERATE_ERROR';
   handler: (error: ErrorMessage) => void;
+}
+
+/**
+ * Frame检测事件处理器
+ */
+export interface DetectFrameHandler extends EventHandler {
+  name: 'DETECT_FRAME';
+  handler: () => void;
+}
+
+/**
+ * Frame检测结果事件处理器
+ */
+export interface FrameDetectedHandler extends EventHandler {
+  name: 'FRAME_DETECTED';
+  handler: (frameSize: FrameSize | null) => void;
 }
 
 /**

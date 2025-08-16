@@ -27,6 +27,9 @@ import {
 import { renderSankeyToFigma } from './utils/figmaRenderer'
 import { StorageManager } from './utils/storage'
 
+// 导入RenderOptions类型
+import type { RenderOptions } from './utils/figmaRenderer'
+
 export default function () {
   // 监听生成桑基图请求
   on<GenerateSankeyHandler>('GENERATE_SANKEY', async (request: GenerateSankeyRequest) => {
@@ -61,14 +64,93 @@ export default function () {
         dimensions: `${computedData.width}x${computedData.height}`
       })
       
-      // 渲染到Figma画布
-      // eslint-disable-next-line no-console
-      console.log('开始渲染到Figma...')
-      await renderSankeyToFigma(computedData, request.config, {
+      // 检测选中的frame尺寸（智能尺寸适配）
+      let frameSize = null;
+      let renderOptions: RenderOptions = {
         x: 100,
         y: 100,
         createFrame: true
-      })
+      };
+      
+      try {
+        // 获取当前选中的所有对象
+        const selection = figma.currentPage.selection;
+        console.log('当前选中的对象:', selection.map(node => ({
+          type: node.type,
+          name: node.name,
+          id: node.id
+        })));
+        
+        // 严格检测frame对象
+        const selectedFrame = selection.find(node => {
+          // 必须是FRAME类型
+          if (node.type !== 'FRAME') {
+            return false;
+          }
+          
+          // 确保是真正的frame，不是其他形状
+          const frameNode = node as FrameNode;
+          
+          // 验证frame的基本属性
+          if (typeof frameNode.width !== 'number' || 
+              typeof frameNode.height !== 'number' ||
+              typeof frameNode.x !== 'number' || 
+              typeof frameNode.y !== 'number') {
+            console.warn('检测到无效的frame属性:', frameNode);
+            return false;
+          }
+          
+          // 确保尺寸合理（不是0或负数）
+          if (frameNode.width <= 0 || frameNode.height <= 0) {
+            console.warn('检测到无效的frame尺寸:', { width: frameNode.width, height: frameNode.height });
+            return false;
+          }
+          
+          console.log('验证通过的有效frame:', {
+            name: frameNode.name,
+            id: frameNode.id,
+            width: frameNode.width,
+            height: frameNode.height,
+            x: frameNode.x,
+            y: frameNode.y
+          });
+          
+          return true;
+        }) as FrameNode | undefined;
+        
+        if (selectedFrame) {
+          frameSize = {
+            width: selectedFrame.width,
+            height: selectedFrame.height,
+            x: selectedFrame.x,
+            y: selectedFrame.y
+          };
+          
+          // eslint-disable-next-line no-console
+          console.log('成功检测到有效Frame:', frameSize);
+          
+          // 使用frame的坐标和尺寸进行渲染
+          renderOptions = {
+            x: selectedFrame.x,
+            y: selectedFrame.y,
+            createFrame: false, // 不创建新frame，直接使用选中的frame
+            frameSize: frameSize
+          };
+        } else {
+          // eslint-disable-next-line no-console
+          console.log('未检测到有效的Frame，使用默认尺寸');
+          console.log('请确保在Figma中选中一个Frame对象（不是形状、文本或其他元素）');
+        }
+      } catch (frameDetectionError) {
+        // eslint-disable-next-line no-console
+        console.warn('Frame检测失败，使用默认尺寸:', frameDetectionError);
+        // 继续使用默认渲染选项，不中断流程
+      }
+      
+      // 渲染到Figma画布
+      // eslint-disable-next-line no-console
+      console.log('开始渲染到Figma...', renderOptions);
+      await renderSankeyToFigma(computedData, request.config, renderOptions);
       
       // 保存到历史记录
       const historyItem = {

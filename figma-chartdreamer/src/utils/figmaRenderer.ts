@@ -4,16 +4,17 @@
  */
 
 import { ComputedSankeyData } from './sankeyEngine';
-import { ChartConfig, NodeShape, LinkStyle, ColorScheme } from '../types/sankey.types';
+import { ChartConfig, NodeShape, LinkStyle, ColorScheme, FrameSize } from '../types/sankey.types';
 import { getNodeColor, COLOR_SCHEMES, adjustBrightness } from './colorSchemes';
 
 /**
  * 渲染选项
  */
-interface RenderOptions {
+export interface RenderOptions {
   x?: number;
   y?: number;
   createFrame?: boolean;
+  frameSize?: FrameSize; // 新增：Frame尺寸信息，用于智能尺寸适配
 }
 
 /**
@@ -32,8 +33,47 @@ export async function renderSankeyToFigma(
     const startX = options.x ?? 0;
     const startY = options.y ?? 0;
     
+    // 智能尺寸适配：根据frame尺寸调整图表尺寸
+    let targetWidth = computedData.width;
+    let targetHeight = computedData.height;
+    let scaleFactor = 1;
+    
+    if (options.frameSize) {
+      // 根据frame尺寸计算最佳图表尺寸
+      const { width: frameWidth, height: frameHeight } = options.frameSize;
+      const margin = 40; // 边距，根据bugChecklist建议
+      
+      const availableWidth = frameWidth - margin * 2;
+      const availableHeight = frameHeight - margin * 2;
+      
+      // 保持宽高比，计算最佳适配尺寸
+      const aspectRatio = computedData.width / computedData.height;
+      const frameAspectRatio = availableWidth / availableHeight;
+      
+      if (frameAspectRatio > aspectRatio) {
+        // frame更宽，以高度为准
+        targetHeight = availableHeight;
+        targetWidth = targetHeight * aspectRatio;
+      } else {
+        // frame更高，以宽度为准
+        targetWidth = availableWidth;
+        targetHeight = targetWidth / aspectRatio;
+      }
+      
+      // 计算缩放因子
+      scaleFactor = Math.min(targetWidth / computedData.width, targetHeight / computedData.height);
+      
+      console.log('智能尺寸适配:', {
+        originalSize: `${computedData.width}x${computedData.height}`,
+        frameSize: `${frameWidth}x${frameHeight}`,
+        targetSize: `${targetWidth}x${targetHeight}`,
+        scaleFactor: scaleFactor.toFixed(2)
+      });
+    }
+    
     // 创建容器框架
     let container: FrameNode | PageNode;
+    let targetContainer: FrameNode | null = null; // 目标frame容器
     
     if (options.createFrame !== false) {
       container = figma.createFrame();
@@ -44,8 +84,8 @@ export async function renderSankeyToFigma(
       // 考虑阴影效果(~10px)、文本溢出(~20px)等因素
       const paddingExtra = 30;
       container.resize(
-        computedData.width + paddingExtra, 
-        computedData.height + paddingExtra
+        targetWidth + paddingExtra, 
+        targetHeight + paddingExtra
       );
       
       // 设置框架背景
@@ -59,7 +99,24 @@ export async function renderSankeyToFigma(
       // 添加到当前页面
       figma.currentPage.appendChild(container);
     } else {
-      container = figma.currentPage;
+      // 如果有frameSize，说明要适配到选中的frame
+      if (options.frameSize) {
+        // 查找选中的frame作为目标容器
+        const selection = figma.currentPage.selection;
+        const selectedFrame = selection.find(node => node.type === 'FRAME') as FrameNode | undefined;
+        
+        if (selectedFrame) {
+          targetContainer = selectedFrame;
+          container = selectedFrame; // 使用选中的frame作为容器
+          console.log('使用选中的frame作为容器:', selectedFrame.name);
+        } else {
+          // 如果找不到选中的frame，回退到页面
+          container = figma.currentPage;
+          console.warn('未找到选中的frame，回退到页面容器');
+        }
+      } else {
+        container = figma.currentPage;
+      }
     }
     
     // 创建节点和链接的组
@@ -68,29 +125,31 @@ export async function renderSankeyToFigma(
     nodesGroup.clipsContent = false;
     nodesGroup.fills = [];
     // 设置组的大小以包含所有内容
-    nodesGroup.resize(computedData.width, computedData.height);
+    nodesGroup.resize(targetWidth, targetHeight);
     
     const linksGroup = figma.createFrame();
     linksGroup.name = 'Links';
     linksGroup.clipsContent = false;
     linksGroup.fills = [];
     // 设置组的大小以包含所有内容
-    linksGroup.resize(computedData.width, computedData.height);
+    linksGroup.resize(targetWidth, targetHeight);
     
     // 渲染链接（先渲染，这样它们会在节点下方）
     console.log('开始渲染链接...');
     // 当创建了Frame容器时，不需要额外的偏移，因为组本身会有偏移
     const renderOffsetX = options.createFrame !== false ? 0 : startX;
     const renderOffsetY = options.createFrame !== false ? 0 : startY;
-    await renderLinks(linksGroup, computedData, config, renderOffsetX, renderOffsetY);
+    await renderLinks(linksGroup, computedData, config, renderOffsetX, renderOffsetY, scaleFactor);
     
     // 渲染节点
     console.log('开始渲染节点...');
-    await renderNodes(nodesGroup, computedData, config, renderOffsetX, renderOffsetY);
+    await renderNodes(nodesGroup, computedData, config, renderOffsetX, renderOffsetY, scaleFactor);
     
-    // 将组添加到容器
-    container.appendChild(linksGroup);
-    container.appendChild(nodesGroup);
+    // 将组添加到容器（如果没有在frame适配中已经添加）
+    if (!targetContainer || options.createFrame !== false) {
+      container.appendChild(linksGroup);
+      container.appendChild(nodesGroup);
+    }
     
     // 如果创建了框架，调整其位置以适应内容
     if (options.createFrame !== false && container.type === 'FRAME') {
@@ -103,10 +162,66 @@ export async function renderSankeyToFigma(
       
       // 自动缩放视图以显示整个图表
       figma.viewport.scrollAndZoomIntoView([container]);
+    } else if (targetContainer && options.frameSize) {
+      // 智能尺寸适配：将组放置到选中的frame中
+      const { width: frameWidth, height: frameHeight } = options.frameSize;
+      const margin = 40;
+      
+      // 计算居中位置（相对于frame的左上角）
+      const centerX = margin;
+      const centerY = margin;
+      
+      // 设置组的位置
+      linksGroup.x = centerX;
+      linksGroup.y = centerY;
+      nodesGroup.x = centerX;
+      nodesGroup.y = centerY;
+      
+      console.log('已适配到Frame:', { 
+        frameName: targetContainer.name,
+        centerX, 
+        centerY, 
+        targetWidth, 
+        targetHeight,
+        frameSize: `${frameWidth}x${frameHeight}`
+      });
+      
+      // 将组添加到选中的frame中，而不是页面
+      targetContainer.appendChild(linksGroup);
+      targetContainer.appendChild(nodesGroup);
+      
+      // 更新container引用，因为组现在在frame中
+      container = targetContainer;
+    } else if (options.frameSize) {
+      // 智能尺寸适配：将组放置在frame内的合适位置
+      const { width: frameWidth, height: frameHeight } = options.frameSize;
+      const margin = 40;
+      
+      // 计算居中位置
+      const centerX = (frameWidth - targetWidth) / 2;
+      const centerY = (frameHeight - targetHeight) / 2;
+      
+      linksGroup.x = centerX;
+      linksGroup.y = centerY;
+      nodesGroup.x = centerX;
+      nodesGroup.y = centerY;
+      
+      console.log('已适配到Frame:', { centerX, centerY, targetWidth, targetHeight });
     }
     
-    // 选中生成的图表
-    figma.currentPage.selection = [container as SceneNode];
+    // 选中生成的图表（只有当container不是页面节点时才选择）
+    if (container.type !== 'PAGE') {
+      figma.currentPage.selection = [container as SceneNode];
+    } else {
+      // 如果container是页面，选择生成的组
+      const groupsToSelect: SceneNode[] = [];
+      if (linksGroup) groupsToSelect.push(linksGroup);
+      if (nodesGroup) groupsToSelect.push(nodesGroup);
+      
+      if (groupsToSelect.length > 0) {
+        figma.currentPage.selection = groupsToSelect;
+      }
+    }
     
     console.log('渲染完成！');
     
@@ -124,7 +239,8 @@ async function renderNodes(
   computedData: ComputedSankeyData,
   config: ChartConfig,
   offsetX: number,
-  offsetY: number
+  offsetY: number,
+  scaleFactor: number
 ): Promise<void> {
   // 加载字体
   await figma.loadFontAsync({ family: "Inter", style: "Regular" });
@@ -247,7 +363,8 @@ async function renderLinks(
   computedData: ComputedSankeyData,
   config: ChartConfig,
   offsetX: number,
-  offsetY: number
+  offsetY: number,
+  scaleFactor: number
 ): Promise<void> {
   // 打印详细的链接数据以便调试
   console.log('Links data structure:', computedData.links.map((link, idx) => ({
@@ -357,97 +474,29 @@ async function renderLinks(
 
 /**
  * 生成链接的SVG路径
- * D3-sankey的坐标系统说明：
- * - link.y0: 链接在源节点处的顶部Y坐标
- * - link.y1: link.y0 + link.width (链接在源节点处的底部Y坐标)
- * - 目标节点的Y坐标需要通过targetLinks数组计算
+ * 直接使用D3-sankey计算的结果，不进行任何干预
  */
 function generateLinkPath(source: any, target: any, link: any, style: LinkStyle): string {
+  // 直接使用D3计算的坐标，不进行任何修改
   const x0 = source.x1;  // 源节点的右边缘
   const x1 = target.x0;  // 目标节点的左边缘
   
-  // 链接宽度
+  // 直接使用D3计算的链接宽度和位置
   const width = link.width || 1;
-  
-  // 源节点处的链接Y坐标 - 直接使用D3计算的值
   const sourceY0 = link.y0;
   const sourceY1 = link.y0 + width;
   
-  // 计算链接在目标节点处的Y坐标
-  let targetY0 = target.y0 || 0;  // 默认值
-  let targetY1 = targetY0 + width;
+  // 直接使用D3计算的目标位置，不重新计算
+  // D3已经正确计算了链接在目标节点中的位置
+  const targetY0 = link.y1 - width; // 使用D3计算的y1减去宽度
+  const targetY1 = link.y1;
   
-  // 调试信息
-  console.log(`Link ${source.id} -> ${target.id}:`, {
+  console.log(`Link ${source.id} -> ${target.id} (D3原始数据):`, {
     sourceY: { y0: sourceY0, y1: sourceY1 },
+    targetY: { y0: targetY0, y1: targetY1 },
     linkWidth: width,
-    targetNode: { y0: target.y0, y1: target.y1 },
-    targetLinksCount: target.targetLinks ? target.targetLinks.length : 0
+    d3Data: { y0: link.y0, y1: link.y1 }
   });
-  
-  // 查找当前链接在目标节点中的位置
-  if (target.targetLinks && Array.isArray(target.targetLinks)) {
-    let cumulativeY = target.y0 || 0;
-    let found = false;
-    
-    // 按Y坐标排序targetLinks，确保顺序正确
-    const sortedTargetLinks = [...target.targetLinks].sort((a, b) => {
-      const aY = a.y0 || 0;
-      const bY = b.y0 || 0;
-      return aY - bY;
-    });
-    
-    // 遍历所有指向该目标节点的链接
-    for (let i = 0; i < sortedTargetLinks.length; i++) {
-      const tLink = sortedTargetLinks[i];
-      const tSource = tLink.source as any;
-      const tLinkWidth = tLink.width || 1;
-      
-      // 使用链接对象引用比较，这是最准确的方式
-      if (tLink === link) {
-        targetY0 = cumulativeY;
-        targetY1 = cumulativeY + tLinkWidth;
-        found = true;
-        console.log(`Found link at position ${i}, targetY: ${targetY0}-${targetY1}`);
-        break;
-      }
-      
-      // 如果引用比较失败，使用备用匹配方法
-      if (!found && tSource && tSource.id === source.id && 
-          Math.abs(tLink.value - link.value) < 0.001 &&
-          Math.abs((tLink.y0 || 0) - link.y0) < 0.001) {
-        targetY0 = cumulativeY;
-        targetY1 = cumulativeY + tLinkWidth;
-        found = true;
-        console.log(`Found link via fallback match at position ${i}, targetY: ${targetY0}-${targetY1}`);
-        break;
-      }
-      
-      // 累加Y偏移
-      cumulativeY += tLinkWidth;
-    }
-    
-    // 如果没找到，记录警告
-    if (!found) {
-      console.warn('Could not find link in target.targetLinks:', {
-        source: source.id,
-        target: target.id,
-        value: link.value,
-        linkY0: link.y0
-      });
-      // 使用备用算法：基于在源节点的位置估算目标节点的位置
-      const sourceRange = source.y1 - source.y0;
-      const targetRange = target.y1 - target.y0;
-      if (sourceRange > 0 && targetRange > 0) {
-        const relativePos = (link.y0 - source.y0) / sourceRange;
-        targetY0 = target.y0 + relativePos * targetRange;
-        targetY1 = targetY0 + width;
-        console.log('Using fallback positioning based on relative position');
-      }
-    }
-  } else {
-    console.warn('Target node has no targetLinks array:', target.id);
-  }
   
   let path: string;
   

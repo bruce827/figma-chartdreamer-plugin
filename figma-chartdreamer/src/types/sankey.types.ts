@@ -37,6 +37,20 @@ export interface SankeyLink {
 }
 
 /**
+ * Frame尺寸接口 - 用于智能尺寸适配
+ */
+export interface FrameSize {
+  /** Frame宽度 */
+  width: number;
+  /** Frame高度 */
+  height: number;
+  /** Frame X坐标 */
+  x: number;
+  /** Frame Y坐标 */
+  y: number;
+}
+
+/**
  * 节点形状类型
  */
 export enum NodeShape {
@@ -106,6 +120,12 @@ export interface ChartConfig {
   customColors?: string[];
   /** 是否自动调整布局 */
   autoLayout?: boolean;
+  
+  // 智能尺寸适配相关字段
+  /** 是否启用智能尺寸适配 */
+  useFrameSize?: boolean;
+  /** Frame尺寸信息 */
+  frameSize?: FrameSize;
 }
 
 /**
@@ -137,6 +157,8 @@ export interface GenerateSankeyRequest {
   format: DataFormat;
   /** 图表配置 */
   config: ChartConfig;
+  /** Frame尺寸信息（可选） */
+  frameSize?: FrameSize;
 }
 
 /**
